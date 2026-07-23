@@ -8,6 +8,10 @@ function getAgentHost(): string {
   return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
 }
 
+function getEvalHost(): string {
+  return process.env.EVAL_HOST || "http://localhost:8099";
+}
+
 /** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
 const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
 const CACHE_TTL_MS = 30_000; // 30s
@@ -773,6 +777,26 @@ async function proxyRoutes(fastify: FastifyInstance) {
         status: 'unreachable',
         timestamp: new Date().toISOString(),
       });
+    }
+  });
+
+  // Eval deployment trigger — separate host from agentpod (KEDA scales 0→1 on this request)
+  fastify.post('/proxy/eval/run', async (request, reply) => {
+    const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
+    const evalHost = getEvalHost();
+    try {
+      const evalResp = await fetch(`${evalHost}/evals/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Trace-ID': traceId },
+        body: JSON.stringify(request.body ?? {}),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const body = await evalResp.text();
+      reply.header('X-Trace-ID', traceId).status(evalResp.status);
+      return reply.send(body);
+    } catch (error) {
+      fastify.log.error({ traceId, err: error }, 'Eval proxy error');
+      return reply.status(202).send({ status: 'triggered', message: 'Eval deployment starting' });
     }
   });
 

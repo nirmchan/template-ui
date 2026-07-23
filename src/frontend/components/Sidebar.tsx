@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { EvalPanel } from './EvalPanel';
 import { useNavigate } from 'react-router-dom';
 import {
   Button,
@@ -256,6 +257,9 @@ function SidebarComponent({
           </div>
         </Tooltip>
       </div>
+
+      {/* Eval Panel */}
+      <EvalPanel />
 
       {/* Footer */}
       <div className="shrink-0 p-3 border-t border-sidebar-border">
