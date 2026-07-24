@@ -1,22 +1,24 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@patternfly/react-core';
-import { ArrowLeft, User, Brain, ScrollText, Palette, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, User, Brain, ScrollText, Palette, ShieldCheck, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ProfileSection } from '../components/settings/ProfileSection';
 import { MemoryList } from '../components/settings/MemoryList';
 import { RulesEditor } from '../components/settings/RulesEditor';
 import { AppearanceSettings } from '../components/settings/AppearanceSettings';
 import { AlwaysAllowedTools } from '../components/settings/AlwaysAllowedTools';
+import { DeveloperSettings } from '../components/settings/DeveloperSettings';
 
-type TabId = 'profile' | 'memories' | 'rules' | 'appearance' | 'tool-approvals';
+type TabId = 'profile' | 'memories' | 'rules' | 'appearance' | 'tool-approvals' | 'developer';
 
-const TABS: { id: TabId; label: string; icon: typeof User }[] = [
+const TABS: { id: TabId; label: string; panelTitle?: string; icon: typeof User }[] = [
   { id: 'profile', label: 'Profile', icon: User },
   { id: 'memories', label: 'Memories', icon: Brain },
   { id: 'rules', label: 'Custom Rules', icon: ScrollText },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'tool-approvals', label: 'Tool Approvals', icon: ShieldCheck },
+  { id: 'developer', label: 'Developer', panelTitle: 'Agent Evaluation', icon: Code2 },
 ];
 
 const TAB_CONTENT: Record<TabId, React.FC> = {
@@ -25,6 +27,7 @@ const TAB_CONTENT: Record<TabId, React.FC> = {
   rules: RulesEditor,
   appearance: AppearanceSettings,
   'tool-approvals': AlwaysAllowedTools,
+  developer: DeveloperSettings,
 };
 
 export function SettingsPage() {
@@ -128,7 +131,7 @@ export function SettingsPage() {
                     tabIndex={0}
                     className="bg-card border border-border rounded-xl p-6 focus:outline-none"
                   >
-                    <h2 className="text-base font-semibold text-foreground mb-4">{tab.label}</h2>
+                    <h2 className={`text-base font-semibold text-foreground mb-4 ${tab.id === 'developer' ? 'text-center' : ''}`}>{tab.panelTitle ?? tab.label}</h2>
                     {activeTab === tab.id && <Content />}
                   </div>
                 );

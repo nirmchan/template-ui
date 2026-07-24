@@ -38,7 +38,7 @@ export function useEvalStatus(): EvalState {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(buildAppPath('/proxy/agent/evals/status'), {
+      const res = await fetch(buildAppPath('/api/proxy/agent/evals/status'), {
         credentials: 'same-origin',
         signal: AbortSignal.timeout(8_000),
       });

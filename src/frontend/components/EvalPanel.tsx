@@ -40,28 +40,42 @@ export function EvalPanel() {
     setTriggering(true);
     try {
       // Step 1: agentpod cache check + atomic in_progress set
+      // Step 1 (optional): agentpod cache check + atomic in_progress set
       const triggerPath = force
-        ? '/proxy/agent/evals/force-trigger'
-        : '/proxy/agent/evals/trigger';
-      const triggerRes = await fetch(buildAppPath(triggerPath), {
-        method: 'POST',
-        credentials: 'same-origin',
-      });
-      const triggerData = (await triggerRes.json()) as Record<string, unknown>;
-
-      // Cached result returned or already running — nothing more to do
-      if (
-        (triggerData as { cached?: boolean }).cached ||
-        (triggerData.eval_status === 'in_progress' &&
-          (triggerData as { message?: string }).message)
-      ) {
-        return;
+        ? '/api/proxy/agent/evals/force-trigger'
+        : '/api/proxy/agent/evals/trigger';
+      let evalContext: { config_hash?: string; org?: string; name?: string } = {};
+      try {
+        const triggerRes = await fetch(buildAppPath(triggerPath), {
+          method: 'POST',
+          credentials: 'same-origin',
+        });
+        if (triggerRes.ok) {
+          const triggerData = (await triggerRes.json()) as Record<string, unknown>;
+          if (
+            (triggerData as { cached?: boolean }).cached ||
+            (triggerData.eval_status === 'in_progress' &&
+              (triggerData as { message?: string }).message)
+          ) {
+            return;
+          }
+          // Capture (config_hash, org, name) to pass to eval pod
+          evalContext = {
+            config_hash: triggerData.config_hash as string | undefined,
+            org: triggerData.org as string | undefined,
+            name: triggerData.name as string | undefined,
+          };
+        }
+      } catch {
+        // endpoint not available — proceed to eval runner directly
       }
 
-      // Step 2: wake eval deployment (KEDA scales 0→1)
-      await fetch(buildAppPath('/proxy/eval/run'), {
+      // Step 2: call eval runner with context so it can find the right evals row
+      await fetch(buildAppPath('/api/proxy/eval/run'), {
         method: 'POST',
         credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(evalContext),
       });
     } catch {
       // ignore — status polling will reflect outcome
