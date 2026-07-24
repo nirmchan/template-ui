@@ -780,14 +780,40 @@ async function proxyRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Eval deployment trigger — separate host from agentpod (KEDA scales 0→1 on this request)
+  // Eval runner proxy — forwards to EVAL_HOST (default: http://localhost:8099)
+  fastify.get('/proxy/eval/status', async (request, reply) => {
+    const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
+    const evalHost = getEvalHost();
+    try {
+      const evalResp = await fetch(`${evalHost}/evals/status`, {
+        headers: { 'X-Trace-ID': traceId },
+        signal: AbortSignal.timeout(8_000),
+      });
+      const body = await evalResp.text();
+      reply.header('X-Trace-ID', traceId).status(evalResp.status);
+      return reply.send(body);
+    } catch (error) {
+      fastify.log.error({ traceId, err: error }, 'Eval status proxy error');
+      return reply.status(503).send({ eval_status: 'unknown' });
+    }
+  });
+
   fastify.post('/proxy/eval/run', async (request, reply) => {
     const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
     const evalHost = getEvalHost();
     try {
+      // Forward the user's access token so the eval runner can call the agent
+      // with user context (required for MCP tools which are user-scoped).
+      const { accessToken } = await ensureFreshTokens(fastify, request);
+      const evalHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Trace-ID': traceId,
+      };
+      if (accessToken) evalHeaders['Authorization'] = `Bearer ${accessToken}`;
+
       const evalResp = await fetch(`${evalHost}/evals/run`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Trace-ID': traceId },
+        headers: evalHeaders,
         body: JSON.stringify(request.body ?? {}),
         signal: AbortSignal.timeout(10_000),
       });
