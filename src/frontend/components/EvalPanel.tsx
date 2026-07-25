@@ -39,12 +39,10 @@ export function EvalPanel() {
   const handleEvaluate = async (force = false) => {
     setTriggering(true);
     try {
-      // Step 1: agentpod cache check + atomic in_progress set
-      // Step 1 (optional): agentpod cache check + atomic in_progress set
+      // Call trigger — agentpod handles cache check, in_progress guard, and starting the eval pod
       const triggerPath = force
         ? '/api/proxy/agent/evals/force-trigger'
         : '/api/proxy/agent/evals/trigger';
-      let evalContext: { config_hash?: string; org?: string; name?: string } = {};
       try {
         const triggerRes = await fetch(buildAppPath(triggerPath), {
           method: 'POST',
@@ -59,24 +57,11 @@ export function EvalPanel() {
           ) {
             return;
           }
-          // Capture (config_hash, org, name) to pass to eval pod
-          evalContext = {
-            config_hash: triggerData.config_hash as string | undefined,
-            org: triggerData.org as string | undefined,
-            name: triggerData.name as string | undefined,
-          };
         }
       } catch {
-        // endpoint not available — proceed to eval runner directly
+        // endpoint not available — nothing to do
+        return;
       }
-
-      // Step 2: call eval runner with context so it can find the right evals row
-      await fetch(buildAppPath('/api/proxy/eval/run'), {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(evalContext),
-      });
     } catch {
       // ignore — status polling will reflect outcome
     } finally {

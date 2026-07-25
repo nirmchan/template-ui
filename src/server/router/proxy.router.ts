@@ -8,9 +8,6 @@ function getAgentHost(): string {
   return cfg.agent.endpoint || process.env.AGENT_HOST || "http://localhost:5002";
 }
 
-function getEvalHost(): string {
-  return process.env.EVAL_HOST || "http://localhost:8099";
-}
 
 /** In-memory LRU cache for thread state responses (avoids repeated LangGraph deserialization). */
 const THREAD_STATE_CACHE = new Map<string, { body: string; ts: number }>();
@@ -780,51 +777,6 @@ async function proxyRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Eval runner proxy — forwards to EVAL_HOST (default: http://localhost:8099)
-  fastify.get('/proxy/eval/status', async (request, reply) => {
-    const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
-    const evalHost = getEvalHost();
-    try {
-      const evalResp = await fetch(`${evalHost}/evals/status`, {
-        headers: { 'X-Trace-ID': traceId },
-        signal: AbortSignal.timeout(8_000),
-      });
-      const body = await evalResp.text();
-      reply.header('X-Trace-ID', traceId).status(evalResp.status);
-      return reply.send(body);
-    } catch (error) {
-      fastify.log.error({ traceId, err: error }, 'Eval status proxy error');
-      return reply.status(503).send({ eval_status: 'unknown' });
-    }
-  });
-
-  fastify.post('/proxy/eval/run', async (request, reply) => {
-    const traceId = (request.headers['x-trace-id'] as string) || randomUUID();
-    const evalHost = getEvalHost();
-    try {
-      // Forward the user's access token so the eval runner can call the agent
-      // with user context (required for MCP tools which are user-scoped).
-      const { accessToken } = await ensureFreshTokens(fastify, request);
-      const evalHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'X-Trace-ID': traceId,
-      };
-      if (accessToken) evalHeaders['Authorization'] = `Bearer ${accessToken}`;
-
-      const evalResp = await fetch(`${evalHost}/evals/run`, {
-        method: 'POST',
-        headers: evalHeaders,
-        body: JSON.stringify(request.body ?? {}),
-        signal: AbortSignal.timeout(10_000),
-      });
-      const body = await evalResp.text();
-      reply.header('X-Trace-ID', traceId).status(evalResp.status);
-      return reply.send(body);
-    } catch (error) {
-      fastify.log.error({ traceId, err: error }, 'Eval proxy error');
-      return reply.status(202).send({ status: 'triggered', message: 'Eval deployment starting' });
-    }
-  });
 
   fastify.post('/auth/generate-one-time-token', async (request, reply) => {
     const { accessToken, refreshFailed } = await ensureFreshTokens(fastify, request);

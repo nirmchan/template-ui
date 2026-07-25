@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { buildAppPath } from '../../lib/app-paths';
 
 type EvalStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -357,16 +357,146 @@ function EvalResultViz({ data, prevScore, full = false }: { data: Record<string,
   );
 }
 
+function EvalStatusBar({
+  status,
+  score,
+  pass,
+  fail,
+  createdAt,
+}: {
+  status: string | null;
+  score: number | null;
+  pass: number;
+  fail: number;
+  createdAt: string | null;
+}) {
+  const [elapsed, setElapsed] = useState('');
+  useEffect(() => {
+    if (!createdAt || (status !== 'in_progress' && status !== 'not_started')) return;
+    const tick = () => {
+      const secs = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
+      if (secs < 60) setElapsed(`${secs}s`);
+      else setElapsed(`${Math.floor(secs / 60)}m ${secs % 60}s`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [createdAt, status]);
+
+  if (!status || status === 'unknown') return null;
+
+  if (status === 'in_progress' || status === 'not_started') {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 px-3 py-2">
+        <span className="inline-block h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+        <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Evaluating…</span>
+        {elapsed && <span className="text-xs text-blue-500 ml-auto">{elapsed}</span>}
+      </div>
+    );
+  }
+  if (status === 'completed' || status === 'passed') {
+    const pct = score != null ? Math.round(score * 100) : null;
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 px-3 py-2">
+        <span className="text-green-600">✓</span>
+        <span className="text-sm font-medium text-green-700 dark:text-green-300">
+          {pct != null ? `${pct}%` : 'Completed'}
+        </span>
+        <span className="text-xs text-green-600">{pass} passed · {fail} failed</span>
+      </div>
+    );
+  }
+  if (status === 'failed' || status === 'error') {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 px-3 py-2">
+        <span className="text-red-500">✗</span>
+        <span className="text-sm font-medium text-red-700 dark:text-red-300">Eval failed</span>
+        {pass > 0 || fail > 0 ? <span className="text-xs text-red-500">{pass} passed · {fail} failed</span> : null}
+      </div>
+    );
+  }
+  return null;
+}
+
 // --- Main component ---
 
 export function DeveloperSettings() {
   const [evaluateState, setEvaluateState] = useState<ActionState>(INITIAL);
-  const [forceState, setForceState] = useState<ActionState>(INITIAL);
   const [resultState, setResultState] = useState<ActionState>(INITIAL);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [prevScore, setPrevScore] = useState<number | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [forceCooldown, setForceCooldown] = useState(false);
+  const [forceMode, setForceMode] = useState(false);
+  const [evalStatus, setEvalStatus] = useState<{
+    status: string | null;
+    score: number | null;
+    pass: number;
+    fail: number;
+    createdAt: string | null;
+  }>({ status: null, score: null, pass: 0, fail: 0, createdAt: null });
+  const [isEvalRunning, setIsEvalRunning] = useState(false);
+
+  // Fetch initial status on mount
+  useEffect(() => {
+    fetch(buildAppPath('/api/proxy/agent/evals/status'), { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: Record<string, unknown> | null) => {
+        if (!data) return;
+        const st = data.eval_status as string | undefined;
+        if (!st || st === 'not_started') return;
+        setEvalStatus({
+          status: st,
+          score: typeof data.eval_score === 'number' ? data.eval_score : null,
+          pass: typeof data.pass === 'number' ? data.pass : 0,
+          fail: typeof data.fail === 'number' ? data.fail : 0,
+          createdAt: typeof data.created_at === 'string' ? data.created_at : null,
+        });
+        if (st === 'in_progress' || st === 'not_started') setIsEvalRunning(true);
+        if (st === 'completed' || st === 'passed') {
+          fetch(buildAppPath('/api/proxy/agent/evals/results'), { credentials: 'same-origin' })
+            .then(r => r.ok ? r.json() : null)
+            .then((rData: Record<string, unknown> | null) => { if (rData) setResult(rData); })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Poll status every 5 seconds when running
+  useEffect(() => {
+    if (!isEvalRunning) return;
+    const poll = async () => {
+      try {
+        const res = await fetch(buildAppPath('/api/proxy/agent/evals/status'), {
+          credentials: 'same-origin',
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as Record<string, unknown>;
+        const st = data.eval_status as string | undefined;
+        setEvalStatus({
+          status: st ?? null,
+          score: typeof data.eval_score === 'number' ? data.eval_score : null,
+          pass: typeof data.pass === 'number' ? data.pass : 0,
+          fail: typeof data.fail === 'number' ? data.fail : 0,
+          createdAt: typeof data.created_at === 'string' ? data.created_at : null,
+        });
+        if (st === 'completed' || st === 'passed') {
+          setIsEvalRunning(false);
+          const rRes = await fetch(buildAppPath('/api/proxy/agent/evals/results'), { credentials: 'same-origin' });
+          if (rRes.ok) {
+            const rData = (await rRes.json()) as Record<string, unknown>;
+            setPrevScore((result as { eval_score?: number } | null)?.eval_score ?? null);
+            setResult(rData);
+          }
+        } else if (st === 'failed' || st === 'error') {
+          setIsEvalRunning(false);
+        }
+      } catch { /* ignore */ }
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
+  }, [isEvalRunning]);
 
   const callEval = async (
     path: string,
@@ -412,15 +542,10 @@ export function DeveloperSettings() {
   };
 
   const handleTrigger = async (force: boolean) => {
-    const setState = force ? setForceState : setEvaluateState;
+    const setState = setEvaluateState;
     const triggerPath = force
       ? '/api/proxy/agent/evals/force-trigger'
       : '/api/proxy/agent/evals/trigger';
-
-    if (force) {
-      setForceCooldown(true);
-      setTimeout(() => setForceCooldown(false), 3000);
-    }
 
     setState({ status: 'loading', message: '' });
     try {
@@ -441,27 +566,25 @@ export function DeveloperSettings() {
 
       if (isCached) {
         setState({ status: 'success', message: 'Already complete — showing latest result.' });
+        setEvalStatus({
+          status: 'completed',
+          score: typeof triggerData.eval_score === 'number' ? triggerData.eval_score : null,
+          pass: typeof triggerData.pass === 'number' ? triggerData.pass : 0,
+          fail: typeof triggerData.fail === 'number' ? triggerData.fail : 0,
+          createdAt: typeof triggerData.created_at === 'string' ? triggerData.created_at : null,
+        });
         await fetchResult();
         return;
       }
       if (isAlreadyRunning) {
         setState({ status: 'success', message: 'Eval already running — check back shortly.' });
+        setIsEvalRunning(true);
         return;
       }
 
       setState({ status: 'success', message: 'Eval queued — running in background.' });
-
-      const config_hash = triggerData.config_hash as string | undefined;
-      const org = triggerData.org as string | undefined;
-      const name = triggerData.name as string | undefined;
-      if (config_hash && org && name) {
-        await fetch(buildAppPath('/api/proxy/eval/run'), {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ config_hash, org, name }),
-        });
-      }
+      setIsEvalRunning(true);
+      setEvalStatus({ status: 'in_progress', score: null, pass: 0, fail: 0, createdAt: new Date().toISOString() });
     } catch (e) {
       setState({ status: 'error', message: String(e) });
     }
@@ -476,14 +599,17 @@ export function DeveloperSettings() {
   return (
     <div className="space-y-4">
       <div className="pt-2 space-y-3">
+        {/* Status bar */}
+        <EvalStatusBar {...evalStatus} />
+
         {/* Buttons row */}
         <div className="flex items-center gap-3 flex-wrap">
 
           {/* Evaluate */}
           <div className="relative group">
             <button
-              onClick={() => void handleTrigger(false)}
-              disabled={evaluateState.status === 'loading'}
+              onClick={() => void handleTrigger(forceMode)}
+              disabled={evaluateState.status === 'loading' || isEvalRunning}
               className="w-36 px-5 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
             >
               {evaluateState.status === 'loading' ? 'Running…' : 'Evaluate'}
@@ -493,45 +619,22 @@ export function DeveloperSettings() {
             </div>
           </div>
 
-          {/* Force Evaluate */}
-          <div className="relative group">
-            <button
-              onClick={() => void handleTrigger(true)}
-              disabled={forceState.status === 'loading' || forceCooldown}
-              className="w-36 px-5 py-2.5 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {forceState.status === 'loading' ? 'Running…' : forceCooldown ? 'Please wait…' : 'Force Evaluate'}
-            </button>
-            <div className="absolute left-0 top-full mt-1.5 z-10 hidden group-hover:block w-56 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md pointer-events-none">
-              Skips the cache and always triggers a fresh eval run regardless of previous results.
-            </div>
-          </div>
-
-          {/* Get Result */}
-          <div className="relative group">
-            <button
-              onClick={() => void fetchResult()}
-              disabled={resultState.status === 'loading'}
-              className="w-36 px-5 py-2.5 rounded-md bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 disabled:opacity-50"
-            >
-              {resultState.status === 'loading' ? 'Fetching…' : 'Get Result'}
-            </button>
-            <div className="absolute left-0 top-full mt-1.5 z-10 hidden group-hover:block w-56 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md pointer-events-none">
-              Fetches the latest completed eval run and shows an aggregated score summary.
-            </div>
-          </div>
+          <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={forceMode}
+              onChange={(e) => setForceMode(e.target.checked)}
+              disabled={isEvalRunning}
+              className="rounded border-border"
+            />
+            Force re-run (skip cache)
+          </label>
 
         </div>
 
-        {/* Status messages below the row */}
+        {/* Status message below the row */}
         {evaluateState.message && (
           <p className={`text-xs ${statusColor(evaluateState.status)}`}>{evaluateState.message}</p>
-        )}
-        {forceState.message && (
-          <p className={`text-xs ${statusColor(forceState.status)}`}>{forceState.message}</p>
-        )}
-        {resultState.status === 'error' && (
-          <p className="text-xs text-red-600">{resultState.message}</p>
         )}
       </div>
 
