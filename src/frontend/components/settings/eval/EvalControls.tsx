@@ -9,7 +9,7 @@ interface EvalControlsProps {
 }
 
 function statusColor(s: EvalStatus) {
-  if (s === 'success') return 'text-green-600 dark:text-green-400';
+  if (s === 'success') return 'text-emerald-600 dark:text-emerald-400';
   if (s === 'error') return 'text-red-600 dark:text-red-400';
   return 'text-muted-foreground';
 }
@@ -22,30 +22,26 @@ export function EvalControls({
   onForceModeChange,
 }: EvalControlsProps) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative group">
-          <button
-            onClick={() => onTrigger(forceMode)}
-            disabled={triggerState.status === 'loading' || isRunning}
-            className="w-36 px-5 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
-          >
-            {triggerState.status === 'loading' ? 'Running…' : 'Evaluate'}
-          </button>
-          <div className="absolute left-0 top-full mt-1.5 z-10 hidden group-hover:block w-56 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md pointer-events-none">
-            Returns cached result if already complete, otherwise queues a new eval run.
-          </div>
-        </div>
+    <div className="space-y-2">
+      <div className="flex items-center gap-4 flex-wrap">
+        <button
+          onClick={() => onTrigger(forceMode)}
+          disabled={triggerState.status === 'loading' || isRunning}
+          className="px-5 py-2 rounded-md bg-primary text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          style={{ color: '#ffffff' }}
+        >
+          {triggerState.status === 'loading' ? 'Running…' : 'Evaluate'}
+        </button>
 
-        <label className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground">
+        <label className="flex items-center gap-2 cursor-pointer text-sm text-foreground/70 hover:text-foreground transition-colors select-none">
           <input
             type="checkbox"
             checked={forceMode}
             onChange={(e) => onForceModeChange(e.target.checked)}
             disabled={isRunning}
-            className="rounded border-border"
+            className="rounded border-border accent-primary"
           />
-          Force re-run (skip cache)
+          Force re-run
         </label>
       </div>
 

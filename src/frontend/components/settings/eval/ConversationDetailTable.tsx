@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import type { Turn } from './eval-types';
+import type { Turn, ConvStats } from './eval-types';
 import { friendlyMetricName, friendlyConversationName } from './eval-utils';
 
 interface ConversationDetailTableProps {
   turns: Turn[];
+  byConversation?: Record<string, ConvStats>;
 }
 
-export function ConversationDetailTable({ turns }: ConversationDetailTableProps) {
+export function ConversationDetailTable({ turns, byConversation }: ConversationDetailTableProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const grouped: Record<string, Turn[]> = {};
@@ -21,25 +22,47 @@ export function ConversationDetailTable({ turns }: ConversationDetailTableProps)
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Detailed Breakdown
+        Conversations
       </p>
       <div className="space-y-3">
         {Object.entries(grouped).map(([conv, convTurns]) => {
           const isOpen = expanded[conv] ?? true;
+          const convStats = byConversation?.[conv];
+          const pass = convStats?.pass ?? 0;
+          const fail = convStats?.fail ?? 0;
+          const total = pass + fail;
+          const rate = total > 0 ? Math.round((pass / total) * 100) : null;
+
           return (
             <div key={conv} className="rounded-lg border border-border overflow-hidden">
               <button
                 onClick={() =>
                   setExpanded((prev) => ({ ...prev, [conv]: !isOpen }))
                 }
-                className="w-full flex items-center justify-between px-3 py-2.5 bg-secondary/30 hover:bg-secondary/50 text-left"
+                className="w-full flex items-center justify-between px-3 py-2.5 bg-secondary/30 hover:bg-secondary/50 text-left cursor-pointer"
               >
                 <span className="text-sm font-semibold text-foreground">
                   {friendlyConversationName(conv)}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {isOpen ? '▲' : '▼'}
-                </span>
+                <div className="flex items-center gap-3">
+                  {rate != null && (
+                    <span className={`text-xs font-semibold ${
+                      fail === 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}>
+                      {rate}%
+                    </span>
+                  )}
+                  {total > 0 && (
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {pass}/{total} checks
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {isOpen ? '▲' : '▼'}
+                  </span>
+                </div>
               </button>
 
               {isOpen && (
@@ -65,7 +88,7 @@ export function ConversationDetailTable({ turns }: ConversationDetailTableProps)
                             <span
                               className={`inline-block rounded-full px-2 py-0.5 font-semibold ${
                                 isPass
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
                                   : isFail
                                     ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
                                     : 'bg-secondary text-secondary-foreground'

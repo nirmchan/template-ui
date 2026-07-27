@@ -44,7 +44,7 @@ export function CategoryCard({
               pct == null
                 ? 'text-muted-foreground'
                 : isGood
-                  ? 'text-green-600 dark:text-green-400'
+                  ? 'text-emerald-600 dark:text-emerald-400'
                   : isBad
                     ? 'text-red-600 dark:text-red-400'
                     : 'text-yellow-600 dark:text-yellow-400'
@@ -55,7 +55,7 @@ export function CategoryCard({
           {delta && delta.direction !== 'same' && (
             <span
               className={`text-xs font-medium ${
-                delta.direction === 'up' ? 'text-green-600' : 'text-red-500'
+                delta.direction === 'up' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
               }`}
             >
               {delta.direction === 'up' ? '↑' : '↓'} {delta.value}%

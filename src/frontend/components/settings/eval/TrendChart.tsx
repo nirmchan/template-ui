@@ -11,7 +11,7 @@ import {
 import type { EvalTrendsResponse } from './eval-types';
 import { friendlyMetricName } from './eval-utils';
 
-const CHART_COLORS_LIGHT = ['#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed'];
+const CHART_COLORS_LIGHT = ['#dc2626', '#2563eb', '#059669', '#d97706', '#7c3aed'];
 const CHART_COLORS_DARK = ['#f56e6e', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8'];
 
 function getChartColors(): string[] {
@@ -47,15 +47,10 @@ interface TrendChartProps {
 export function TrendChart({ data }: TrendChartProps) {
   if (!data.overall || data.overall.length < 2) {
     return (
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Score Trends
+      <div className="rounded-lg border border-border bg-card px-4 py-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          Need at least 2 eval runs to show trends.
         </p>
-        <div className="rounded-lg border border-border bg-card px-4 py-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            Need at least 2 eval runs to show trends.
-          </p>
-        </div>
       </div>
     );
   }
@@ -99,10 +94,7 @@ export function TrendChart({ data }: TrendChartProps) {
   const axisTickColor = isDark ? '#a1a1aa' : '#71717a';
 
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Score Trends
-      </p>
+    <div>
       <div className="rounded-lg border border-border bg-card p-3">
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>

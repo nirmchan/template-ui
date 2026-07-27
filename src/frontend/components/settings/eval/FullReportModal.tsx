@@ -1,8 +1,7 @@
-import type { EvalRow, ConvStats } from './eval-types';
+import type { EvalRow } from './eval-types';
 import { ScoreGauge } from './ScoreGauge';
 import { ScoreHero } from './ScoreHero';
 import { MetricCard } from './MetricCard';
-import { ConversationSection } from './ConversationSection';
 import { ConversationDetailTable } from './ConversationDetailTable';
 
 interface FullReportModalProps {
@@ -26,34 +25,34 @@ export function FullReportModal({ result, prevScore, onClose }: FullReportModalP
           </h2>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground text-lg leading-none"
+            className="text-muted-foreground hover:text-foreground text-lg leading-none cursor-pointer"
           >
             &#10005;
           </button>
         </div>
         <div className="overflow-auto p-5 space-y-5">
-          <div className="flex flex-col sm:flex-row items-center gap-5">
+          <div className="flex items-center gap-4">
             {result.eval_score != null && <ScoreGauge score={result.eval_score} />}
-            <div className="flex-1 w-full">
-              <ScoreHero data={result} prevScore={prevScore} />
-            </div>
+            <ScoreHero data={result} prevScore={prevScore} />
           </div>
+
           {byMetric && Object.keys(byMetric).length > 0 && (
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Metrics
               </p>
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {Object.entries(byMetric).map(([key, stats]) => (
                   <MetricCard key={key} metricKey={key} stats={stats} />
                 ))}
               </div>
             </div>
           )}
-          {byConversation && Object.keys(byConversation).length > 0 && (
-            <ConversationSection byConversation={byConversation} />
+
+          {turns.length > 0 && (
+            <ConversationDetailTable turns={turns} byConversation={byConversation} />
           )}
-          {turns.length > 0 && <ConversationDetailTable turns={turns} />}
+
           <details className="mt-4">
             <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
               Raw JSON

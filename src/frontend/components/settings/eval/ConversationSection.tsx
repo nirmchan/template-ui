@@ -34,7 +34,7 @@ export function ConversationSection({ byConversation }: ConversationSectionProps
               </span>
               <div className="flex items-center gap-3">
                 <span
-                  className={`font-semibold ${allPass ? 'text-green-600' : 'text-red-500'}`}
+                  className={`font-semibold ${allPass ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
                 >
                   {rate}%
                 </span>

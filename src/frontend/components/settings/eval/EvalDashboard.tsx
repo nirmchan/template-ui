@@ -3,7 +3,7 @@ import { useEvalDashboard } from '../../../hooks/useEvalDashboard';
 import type { EvalRow } from './eval-types';
 import { EvalControls } from './EvalControls';
 import { EvalStatusBar } from './EvalStatusBar';
-import { TrendChart } from './TrendChart';
+import { MetricTrendsSection } from './MetricTrendsSection';
 import { EvalRunsTable } from './EvalRunsTable';
 import { FullReportModal } from './FullReportModal';
 
@@ -39,14 +39,9 @@ export function EvalDashboard() {
         score={evalState.score}
         pass={evalState.pass}
         fail={evalState.fail}
-        createdAt={
-          isRunning && evalState.lastChecked
-            ? evalState.lastChecked.toISOString()
-            : null
-        }
       />
 
-      {trends && <TrendChart data={trends} />}
+      {trends && <MetricTrendsSection data={trends} />}
 
       {hasHistory && history && (
         <EvalRunsTable

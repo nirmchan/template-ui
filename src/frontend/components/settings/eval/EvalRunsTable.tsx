@@ -104,7 +104,7 @@ export function EvalRunsTable({ runs, onViewReport }: EvalRunsTableProps) {
                     )}
                   </td>
                   <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${
-                    pct >= 70 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'
+                    pct >= 70 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
                   }`}>
                     {pct}%
                   </td>
