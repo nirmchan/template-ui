@@ -1,14 +1,15 @@
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
   Legend,
+  CartesianGrid,
 } from 'recharts';
 import type { EvalTrendsResponse } from './eval-types';
-import { friendlyMetricName, formatDate } from './eval-utils';
+import { friendlyMetricName } from './eval-utils';
 
 const CHART_COLORS_LIGHT = ['#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed'];
 const CHART_COLORS_DARK = ['#f56e6e', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8'];
@@ -18,6 +19,25 @@ function getChartColors(): string[] {
   return document.documentElement.classList.contains('dark')
     ? CHART_COLORS_DARK
     : CHART_COLORS_LIGHT;
+}
+
+function formatTickLabel(iso: string, allSameDay: boolean): string {
+  const d = new Date(iso);
+  if (allSameDay) {
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function formatTooltipLabel(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
 }
 
 interface TrendChartProps {
@@ -40,37 +60,43 @@ export function TrendChart({ data }: TrendChartProps) {
     );
   }
 
-  const metricKeys = Object.keys(data.metrics);
   const colors = getChartColors();
+  const metricKeys = Object.keys(data.metrics);
 
-  const dateMap = new Map<string, Record<string, number>>();
+  const timestamps = [...new Set([
+    ...data.overall.map(p => p.completed_at),
+    ...Object.values(data.metrics).flatMap(pts => pts.map(p => p.completed_at)),
+  ])].sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
-  for (const point of [...data.overall].reverse()) {
-    const label = formatDate(point.completed_at);
-    if (!dateMap.has(label)) dateMap.set(label, {});
-    dateMap.get(label)!['Overall'] = Math.round(point.eval_score * 100);
-  }
+  const allSameDay = timestamps.length > 0 && timestamps.every(ts => {
+    const d = new Date(ts);
+    const ref = new Date(timestamps[0]);
+    return d.getFullYear() === ref.getFullYear()
+      && d.getMonth() === ref.getMonth()
+      && d.getDate() === ref.getDate();
+  });
 
-  for (const [metric, points] of Object.entries(data.metrics)) {
-    const friendly = friendlyMetricName(metric);
-    for (const point of [...points].reverse()) {
-      const label = formatDate(point.completed_at);
-      if (!dateMap.has(label)) dateMap.set(label, {});
-      if (point.pass_rate != null) {
-        dateMap.get(label)![friendly] = Math.round(point.pass_rate * 100);
-      }
+  const overallMap = new Map(data.overall.map(p => [p.completed_at, p.eval_score]));
+  const metricMaps = new Map(
+    metricKeys.map(k => [k, new Map(data.metrics[k].map(p => [p.completed_at, p.pass_rate]))])
+  );
+
+  const chartData = timestamps.map(ts => {
+    const point: Record<string, string | number | null> = { ts };
+    const overallVal = overallMap.get(ts);
+    if (overallVal != null) point['Overall'] = Math.round(overallVal * 100);
+
+    for (const [metric, map] of metricMaps) {
+      const val = map.get(ts);
+      if (val != null) point[friendlyMetricName(metric)] = Math.round(val * 100);
     }
-  }
+    return point;
+  });
 
-  const chartData = Array.from(dateMap.entries()).map(([date, values]) => ({
-    date,
-    ...values,
-  }));
-
-  const allKeys = [
-    'Overall',
-    ...metricKeys.map((k) => friendlyMetricName(k)),
-  ];
+  const allKeys = ['Overall', ...metricKeys.map(k => friendlyMetricName(k))];
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const axisTickColor = isDark ? '#a1a1aa' : '#71717a';
 
   return (
     <div className="space-y-2">
@@ -79,16 +105,18 @@ export function TrendChart({ data }: TrendChartProps) {
       </p>
       <div className="rounded-lg border border-border bg-card p-3">
         <ResponsiveContainer width="100%" height={250}>
-          <AreaChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+          <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+            <CartesianGrid stroke={gridColor} strokeDasharray="3 3" />
             <XAxis
-              dataKey="date"
-              tick={{ fontSize: 11 }}
+              dataKey="ts"
+              tick={{ fontSize: 11, fill: axisTickColor }}
               tickLine={false}
               axisLine={false}
+              tickFormatter={(v: string) => formatTickLabel(v, allSameDay)}
             />
             <YAxis
               domain={[0, 100]}
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: axisTickColor }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v: number) => `${v}%`}
@@ -103,27 +131,26 @@ export function TrendChart({ data }: TrendChartProps) {
               }}
               itemStyle={{ color: 'var(--foreground)' }}
               labelStyle={{ color: 'var(--foreground)', fontWeight: 600 }}
+              labelFormatter={(label: string) => formatTooltipLabel(label)}
               formatter={(value: number) => [`${value}%`]}
             />
             <Legend
               wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
             />
             {allKeys.map((key, i) => (
-              <Area
+              <Line
                 key={key}
                 type="monotone"
                 dataKey={key}
                 stroke={colors[i % colors.length]}
-                fill={colors[i % colors.length]}
-                fillOpacity={0.08}
                 strokeWidth={key === 'Overall' ? 2.5 : 2}
                 strokeDasharray={key === 'Overall' ? '6 3' : undefined}
-                dot={{ r: 3, strokeWidth: 2 }}
-                activeDot={{ r: 5 }}
+                dot={{ r: 4, strokeWidth: 2, fill: isDark ? '#1e1e2e' : '#ffffff' }}
+                activeDot={{ r: 6 }}
                 connectNulls
               />
             ))}
-          </AreaChart>
+          </LineChart>
         </ResponsiveContainer>
       </div>
     </div>
