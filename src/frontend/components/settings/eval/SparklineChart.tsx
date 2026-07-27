@@ -11,7 +11,7 @@ export function SparklineChart({
   data,
   width = 120,
   height = 32,
-  color = 'var(--chart-2)',
+  color = '#2563eb',
 }: SparklineChartProps) {
   if (data.length < 2) return null;
 
@@ -25,7 +25,7 @@ export function SparklineChart({
             type="monotone"
             dataKey="value"
             stroke={color}
-            strokeWidth={1.5}
+            strokeWidth={2}
             dot={false}
             isAnimationActive={false}
           />

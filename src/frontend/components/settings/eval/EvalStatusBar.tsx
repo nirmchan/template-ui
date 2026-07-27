@@ -37,13 +37,19 @@ export function EvalStatusBar({ status, score, pass, fail, createdAt }: EvalStat
 
   if (status === 'completed' || status === 'passed') {
     const pct = score != null ? Math.round(score * 100) : null;
+    const isGood = pct == null || pct >= 70;
+    const borderCls = isGood ? 'border-green-200' : 'border-red-200';
+    const bgCls = isGood ? 'bg-green-50 dark:bg-green-950/20' : 'bg-red-50 dark:bg-red-950/20';
+    const iconCls = isGood ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
+    const textCls = isGood ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300';
+    const subCls = isGood ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 px-3 py-2">
-        <span className="text-green-600 dark:text-green-400">&#10003;</span>
-        <span className="text-sm font-medium text-green-700 dark:text-green-300">
+      <div className={`flex items-center gap-2 rounded-lg border ${borderCls} ${bgCls} px-3 py-2`}>
+        <span className={iconCls}>{isGood ? '✓' : '✗'}</span>
+        <span className={`text-sm font-medium ${textCls}`}>
           {pct != null ? `${pct}%` : 'Completed'}
         </span>
-        <span className="text-xs text-green-600 dark:text-green-400">
+        <span className={`text-xs ${subCls}`}>
           {pass} passed &middot; {fail} failed
         </span>
       </div>

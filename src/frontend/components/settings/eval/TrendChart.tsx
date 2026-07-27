@@ -10,13 +10,15 @@ import {
 import type { EvalTrendsResponse } from './eval-types';
 import { friendlyMetricName, formatDate } from './eval-utils';
 
-const CHART_COLORS = [
-  'var(--chart-1)',
-  'var(--chart-2)',
-  'var(--chart-3)',
-  'var(--chart-4)',
-  'var(--chart-5)',
-];
+const CHART_COLORS_LIGHT = ['#dc2626', '#2563eb', '#16a34a', '#d97706', '#7c3aed'];
+const CHART_COLORS_DARK = ['#f56e6e', '#4dabf7', '#51cf66', '#ffd43b', '#cc5de8'];
+
+function getChartColors(): string[] {
+  if (typeof document === 'undefined') return CHART_COLORS_LIGHT;
+  return document.documentElement.classList.contains('dark')
+    ? CHART_COLORS_DARK
+    : CHART_COLORS_LIGHT;
+}
 
 interface TrendChartProps {
   data: EvalTrendsResponse;
@@ -39,6 +41,7 @@ export function TrendChart({ data }: TrendChartProps) {
   }
 
   const metricKeys = Object.keys(data.metrics);
+  const colors = getChartColors();
 
   const dateMap = new Map<string, Record<string, number>>();
 
@@ -98,6 +101,8 @@ export function TrendChart({ data }: TrendChartProps) {
                 backgroundColor: 'var(--card)',
                 color: 'var(--foreground)',
               }}
+              itemStyle={{ color: 'var(--foreground)' }}
+              labelStyle={{ color: 'var(--foreground)', fontWeight: 600 }}
               formatter={(value: number) => [`${value}%`]}
             />
             <Legend
@@ -108,12 +113,13 @@ export function TrendChart({ data }: TrendChartProps) {
                 key={key}
                 type="monotone"
                 dataKey={key}
-                stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                fill={CHART_COLORS[i % CHART_COLORS.length]}
+                stroke={colors[i % colors.length]}
+                fill={colors[i % colors.length]}
                 fillOpacity={0.08}
-                strokeWidth={key === 'Overall' ? 2.5 : 1.5}
+                strokeWidth={key === 'Overall' ? 2.5 : 2}
                 strokeDasharray={key === 'Overall' ? '6 3' : undefined}
-                dot={false}
+                dot={{ r: 3, strokeWidth: 2 }}
+                activeDot={{ r: 5 }}
                 connectNulls
               />
             ))}
