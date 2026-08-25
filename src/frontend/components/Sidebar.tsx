@@ -11,12 +11,19 @@ import {
   SearchInput,
   Tooltip,
 } from '@patternfly/react-core';
-import { Loader2, MessageSquare, Trash2, Edit3, Plus, Settings, LogOut } from 'lucide-react';
+import { Loader2, MessageSquare, Trash2, Edit3, Plus, Settings, LogOut, ChevronDown, ChevronUp } from 'lucide-react';
 import { logout } from '../services/logout';
 import { cn } from '@/lib/utils';
 import type { SidebarChatItem } from '../types/chat';
 import type { SubAgentInfo } from '../types/deep-agent';
 import { useAgentHealth } from '../hooks/useAgentHealth';
+import { useDeploymentInfo } from '../hooks/useDeploymentInfo';
+
+function formatTimestamp(iso: string | null): string {
+  if (!iso) return 'N/A';
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 interface SidebarProps {
   userName?: string;
@@ -47,10 +54,12 @@ function SidebarComponent({
 }: SidebarProps) {
   const navigate = useNavigate();
   const agentHealth = useAgentHealth();
+  const deploymentInfo = useDeploymentInfo();
   const [searchQuery, setSearchQuery] = useState('');
   const [editingChat, setEditingChat] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
 
 
   const filteredChats = useMemo(() => {
@@ -220,34 +229,76 @@ function SidebarComponent({
       )}
 
       <div className="shrink-0 px-3 py-2 border-t border-sidebar-border">
-        <Tooltip
-          content={
-            agentHealth.status === 'healthy'
+        <button
+          type="button"
+          onClick={() => setDetailsExpanded((prev) => !prev)}
+          className="w-full flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          aria-expanded={detailsExpanded}
+          aria-controls="deployment-details-panel"
+        >
+          <span
+            className={cn(
+              'h-2 w-2 rounded-full shrink-0',
+              agentHealth.status === 'healthy' && 'bg-green-500',
+              agentHealth.status === 'unhealthy' && 'bg-red-500',
+              agentHealth.status === 'unknown' && 'bg-gray-400',
+            )}
+            aria-hidden
+          />
+          <span className="truncate flex-1 text-left">
+            {agentHealth.status === 'healthy'
               ? 'Agent: healthy'
               : agentHealth.status === 'unhealthy'
                 ? 'Agent: offline'
-                : 'Agent: status unknown'
-          }
-        >
-          <div className="flex items-center gap-2 text-xs text-muted-foreground cursor-default">
-            <span
-              className={cn(
-                'h-2 w-2 rounded-full shrink-0',
-                agentHealth.status === 'healthy' && 'bg-green-500',
-                agentHealth.status === 'unhealthy' && 'bg-red-500',
-                agentHealth.status === 'unknown' && 'bg-gray-400',
-              )}
-              aria-hidden
-            />
-            <span className="truncate">
-              {agentHealth.status === 'healthy'
-                ? 'Agent: healthy'
-                : agentHealth.status === 'unhealthy'
-                  ? 'Agent: offline'
-                  : 'Agent: unknown'}
-            </span>
+                : 'Agent: unknown'}
+          </span>
+          {detailsExpanded ? (
+            <ChevronUp className="w-3 h-3 shrink-0" />
+          ) : (
+            <ChevronDown className="w-3 h-3 shrink-0" />
+          )}
+        </button>
+
+        {detailsExpanded && (
+          <div
+            id="deployment-details-panel"
+            className="mt-2 space-y-2 text-xs text-muted-foreground"
+          >
+            {deploymentInfo.loading ? (
+              <div className="flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Loading...</span>
+              </div>
+            ) : deploymentInfo.data?.availableInCluster === false ? (
+              <p className="text-muted-foreground/60 italic">Not running in cluster</p>
+            ) : deploymentInfo.error ? (
+              <p className="text-destructive">{deploymentInfo.error}</p>
+            ) : (
+              <>
+                {deploymentInfo.data?.agent && (
+                  <div className="space-y-0.5">
+                    <p className="font-medium text-foreground/80">Agent Pod</p>
+                    <p>Status: {deploymentInfo.data.agent.status}</p>
+                    <p className="truncate" title={deploymentInfo.data.agent.image}>
+                      Image: {deploymentInfo.data.agent.imageTag}
+                    </p>
+                    <p>Since: {formatTimestamp(deploymentInfo.data.agent.startedAt)}</p>
+                  </div>
+                )}
+                {deploymentInfo.data?.ui && (
+                  <div className="space-y-0.5">
+                    <p className="font-medium text-foreground/80">UI Pod</p>
+                    <p>Status: {deploymentInfo.data.ui.status}</p>
+                    <p className="truncate" title={deploymentInfo.data.ui.image}>
+                      Image: {deploymentInfo.data.ui.imageTag}
+                    </p>
+                    <p>Since: {formatTimestamp(deploymentInfo.data.ui.startedAt)}</p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-        </Tooltip>
+        )}
       </div>
 
       {/* Footer */}
