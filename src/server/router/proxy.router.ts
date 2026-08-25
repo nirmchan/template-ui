@@ -1,7 +1,65 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import { readFileSync, existsSync } from 'node:fs';
 import { getSettings } from '../utils/settings.js';
 import authCheckPlugin from '../plugins/auth-check.plugin.js';
+
+const SA_TOKEN_PATH = '/var/run/secrets/kubernetes.io/serviceaccount/token';
+const SA_NAMESPACE_PATH = '/var/run/secrets/kubernetes.io/serviceaccount/namespace';
+const SA_CA_PATH = '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt';
+const K8S_API_HOST = 'https://kubernetes.default.svc';
+
+interface PodInfo {
+  status: string;
+  image: string;
+  imageTag: string;
+  startedAt: string | null;
+  podName: string;
+}
+
+async function getNamespacePods(namespace: string, labelSelector: string): Promise<PodInfo | null> {
+  if (!existsSync(SA_TOKEN_PATH)) return null;
+
+  const token = readFileSync(SA_TOKEN_PATH, 'utf-8').trim();
+  const url = `${K8S_API_HOST}/api/v1/namespaces/${namespace}/pods?labelSelector=${encodeURIComponent(labelSelector)}`;
+
+  // In-cluster: Node respects NODE_EXTRA_CA_CERTS or the CA is already in the trust store.
+  // For Kind/OpenShift the SA CA is typically auto-trusted.
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as {
+    items?: Array<{
+      metadata?: { name?: string };
+      status?: {
+        phase?: string;
+        containerStatuses?: Array<{
+          image?: string;
+          state?: { running?: { startedAt?: string } };
+        }>;
+      };
+    }>;
+  };
+
+  const pod = data.items?.[0];
+  if (!pod) return null;
+
+  const container = pod.status?.containerStatuses?.[0];
+  const fullImage = container?.image || '';
+  const imageTag = fullImage.includes(':') ? fullImage.split(':').pop()! : 'latest';
+
+  return {
+    status: pod.status?.phase || 'Unknown',
+    image: fullImage,
+    imageTag,
+    startedAt: container?.state?.running?.startedAt || null,
+    podName: pod.metadata?.name || '',
+  };
+}
 
 function getAgentHost(): string {
   const cfg = getSettings();
@@ -1024,6 +1082,43 @@ async function proxyRoutes(fastify: FastifyInstance) {
       return reply.send({
         status: 'unreachable',
         timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
+  fastify.get('/deployment/info', async (_request, reply) => {
+    const namespace = existsSync(SA_NAMESPACE_PATH)
+      ? readFileSync(SA_NAMESPACE_PATH, 'utf-8').trim()
+      : null;
+
+    if (!namespace) {
+      return reply.send({
+        agent: null,
+        ui: null,
+        namespace: null,
+        availableInCluster: false,
+      });
+    }
+
+    try {
+      const [agent, ui] = await Promise.all([
+        getNamespacePods(namespace, 'component=agent'),
+        getNamespacePods(namespace, 'component=ui'),
+      ]);
+
+      return reply.send({
+        agent,
+        ui,
+        namespace,
+        availableInCluster: true,
+      });
+    } catch {
+      return reply.status(502).send({
+        agent: null,
+        ui: null,
+        namespace,
+        availableInCluster: true,
+        error: 'Failed to query K8s API',
       });
     }
   });
