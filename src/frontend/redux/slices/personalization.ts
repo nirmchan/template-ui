@@ -1,4 +1,6 @@
 import { createAsyncThunk, createSelector, createSlice } from '@reduxjs/toolkit';
+import { buildAgentApiUrl } from '../../lib/app-paths';
+import { authenticatedFetch } from '../../services/authenticated-fetch';
 
 // ── Memory items (individual facts from LangGraph Store) ────────────
 
@@ -34,20 +36,15 @@ const initialState: PersonalizationState = {
   error: null,
 };
 
-function getApiBase(): string {
-  const basePath = (window.APP_DATA?.basePath || '').replace(/\/$/, '');
-  return `${basePath}/api/proxy/agent`;
-}
-
 // ── Memory thunks ───────────────────────────────────────────────────
 
 export const fetchMemories = createAsyncThunk(
   'personalization/fetchMemories',
   async () => {
-    const resp = await fetch(`${getApiBase()}/personalization/memories`);
+    const resp = await authenticatedFetch(buildAgentApiUrl('/personalization/memories'));
     if (!resp.ok) throw new Error(`Failed to fetch memories: ${resp.status}`);
     const data = await resp.json();
-    return data.map((m: any) => ({
+    return data.map((m: { id: string; content: string; created_at: string }) => ({
       id: m.id,
       content: m.content,
       createdAt: m.created_at,
@@ -58,9 +55,10 @@ export const fetchMemories = createAsyncThunk(
 export const deleteMemory = createAsyncThunk(
   'personalization/deleteMemory',
   async (memoryId: string) => {
-    const resp = await fetch(`${getApiBase()}/personalization/memories/${memoryId}`, {
-      method: 'DELETE',
-    });
+    const resp = await authenticatedFetch(
+      buildAgentApiUrl(`/personalization/memories/${encodeURIComponent(memoryId)}`),
+      { method: 'DELETE' },
+    );
     if (!resp.ok && resp.status !== 404)
       throw new Error(`Failed to delete memory: ${resp.status}`);
     return memoryId;
@@ -70,7 +68,7 @@ export const deleteMemory = createAsyncThunk(
 export const deleteAllMemories = createAsyncThunk(
   'personalization/deleteAllMemories',
   async () => {
-    const resp = await fetch(`${getApiBase()}/personalization/memories`, {
+    const resp = await authenticatedFetch(buildAgentApiUrl('/personalization/memories'), {
       method: 'DELETE',
     });
     if (!resp.ok) throw new Error(`Failed to delete all memories: ${resp.status}`);
@@ -80,22 +78,29 @@ export const deleteAllMemories = createAsyncThunk(
 // ── Rule thunks ─────────────────────────────────────────────────────
 
 export const fetchRules = createAsyncThunk('personalization/fetchRules', async () => {
-  const resp = await fetch(`${getApiBase()}/personalization/rules`);
+  const resp = await authenticatedFetch(buildAgentApiUrl('/personalization/rules'));
   if (!resp.ok) throw new Error(`Failed to fetch rules: ${resp.status}`);
   const data = await resp.json();
-  return data.map((r: any) => ({
-    id: r.id,
-    content: r.content,
-    isActive: r.is_active,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-  })) as RuleItem[];
+  return data.map(
+    (r: {
+      id: string;
+      content: string;
+      is_active: boolean;
+      created_at: string;
+      updated_at: string;
+    }) => ({
+      id: r.id,
+      content: r.content,
+      isActive: r.is_active,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }),
+  ) as RuleItem[];
 });
 
 export const addRule = createAsyncThunk('personalization/addRule', async (content: string) => {
-  const resp = await fetch(`${getApiBase()}/personalization/rules`, {
+  const resp = await authenticatedFetch(buildAgentApiUrl('/personalization/rules'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content, is_active: true }),
   });
   if (!resp.ok) throw new Error(`Failed to create rule: ${resp.status}`);
@@ -110,15 +115,16 @@ export const addRule = createAsyncThunk('personalization/addRule', async (conten
 });
 
 export const removeRule = createAsyncThunk('personalization/removeRule', async (ruleId: string) => {
-  const resp = await fetch(`${getApiBase()}/personalization/rules/${ruleId}`, {
-    method: 'DELETE',
-  });
+  const resp = await authenticatedFetch(
+    buildAgentApiUrl(`/personalization/rules/${encodeURIComponent(ruleId)}`),
+    { method: 'DELETE' },
+  );
   if (!resp.ok && resp.status !== 404) throw new Error(`Failed to delete rule: ${resp.status}`);
   return ruleId;
 });
 
 export const deleteAllRules = createAsyncThunk('personalization/deleteAllRules', async () => {
-  const resp = await fetch(`${getApiBase()}/personalization/rules`, {
+  const resp = await authenticatedFetch(buildAgentApiUrl('/personalization/rules'), {
     method: 'DELETE',
   });
   if (!resp.ok) throw new Error(`Failed to delete all rules: ${resp.status}`);
